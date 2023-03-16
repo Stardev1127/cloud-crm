@@ -1,0 +1,539 @@
+# Welcome to Serverless!
+#
+# This file is the main config file for your service.
+# It's very minimal at this point and uses default values.
+# You can always add more config options for more control.
+# We've included some commented out config examples here.
+# Just uncomment any of them to get that config option.
+#
+# For full config options, check the docs:
+#    docs.serverless.com
+#
+# Happy Coding!
+
+service: perfsys-cloud-crm-server # NOTE: update this with your service name
+
+# You can pin your service to only deploy with a specific Serverless version
+# Check out our docs for more details
+# frameworkVersion: "=X.X.X"
+
+plugins:
+- serverless-prune-plugin
+
+
+custom:
+  dataUploadBucketName: perfsys-cloud-crm-updates-data-${opt:stage, 'dev'}
+  identityProviderName:  ${file(./deployUtils.js):getCleanString}_CloudCrm
+  yamlStage: ${opt:stage, 'dev'}
+  prune:
+    automatic: true
+    number: 3
+  persistence: perfsys-cloud-crm-api-${self:custom.yamlStage}
+
+provider:
+  name: aws
+  runtime: nodejs8.10
+#  versionFunctions: false
+  stage: ${opt:stage, 'dev'}
+  region: eu-west-1
+  apiKeys:
+    - ${opt:stage, 'dev'}-${self:service}-cloudCrmApiKey
+#    - ${opt:stage, 'dev'}-cloudCrmApiKey-v03
+  usagePlan:
+    quota:
+      limit: 100
+      offset: 0
+      period: DAY
+    throttle:
+      burstLimit: 10
+      rateLimit: 1
+
+# you can overwrite defaults here
+#  stage: dev
+#  region: us-east-1
+
+# you can add statements to the Lambda function's IAM Role here
+#  iamRoleStatements:
+#    - Effect: "Allow"
+#      Action:
+#        - "s3:ListBucket"
+#      Resource: { "Fn::Join" : ["", ["arn:aws:s3:::", { "Ref" : "ServerlessDeploymentBucket" } ] ]  }
+#    - Effect: "Allow"
+#      Action:
+#        - "s3:PutObject"
+#      Resource:
+#        Fn::Join:
+#          - ""
+#          - - "arn:aws:s3:::"
+#            - "Ref" : "ServerlessDeploymentBucket"
+#            - "/*"
+  iamRoleStatements:
+    -
+      Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+        - dynamodb:BatchWriteItem
+        - dynamodb:BatchGetItem
+      Resource:
+        - 'Fn::ImportValue':
+            "Fn::Join":
+            - ':'
+            - - ${self:custom.persistence}
+              - 'ContactUpdatesDynamoDBTable'
+
+        - 'Fn::ImportValue':
+            "Fn::Join":
+            - ':'
+            - - ${self:custom.persistence}
+              - 'GroupsDynamoDBTable'
+
+        - 'Fn::ImportValue':
+            "Fn::Join":
+            - ':'
+            - - ${self:custom.persistence}
+              - 'CompaniesDynamoDBTable'
+
+
+#        - { "Fn::GetAtt": ["ContactUpdatesDynamoDBTable", "Arn" ] }
+#        - { "Fn::GetAtt": ["GroupsDynamoDBTable", "Arn" ] }
+#        - { "Fn::GetAtt": ["CompaniesDynamoDBTable", "Arn" ] }
+    -
+      Resource:
+      - 'Fn::ImportValue':
+          "Fn::Join":
+          - ':'
+          - - ${self:custom.persistence}
+            - 'ContactsDynamoDBTable'
+
+      #        - Fn::GetAtt:
+#            - ContactsDynamoDBTable
+#            - Arn
+      Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+        - dynamodb:BatchWriteItem
+        - dynamodb:BatchGetItem
+        - dynamodb:GetRecords
+        - dynamodb:GetShardIterator
+        - dynamodb:DescribeStream
+        - dynamodb:ListStreams
+    -
+       Resource:
+       - 'Fn::ImportValue':
+           "Fn::Join":
+           - ':'
+           - - ${self:custom.persistence}
+             - 'ContactsDynamoDBTableCompanyIndex'
+
+      #         Fn::Join:
+#           - ''
+#           -
+#             - "Fn::GetAtt": ["ContactsDynamoDBTable", "Arn" ]
+#             - '/index/CompanyIndex'
+       Effect: Allow
+       Action:
+         - dynamodb:Query
+    -
+      Resource:
+        - 'Fn::ImportValue':
+            "Fn::Join":
+              - ':'
+              - - ${self:custom.persistence}
+                - 'ContactManagementTopic'
+      Effect: Allow
+      Action:
+        - SNS:Publish
+
+#    -
+#      Effect: Allow
+#      Action:
+#        - sqs:ReceiveMessage
+#        - sqs:DeleteMessage
+#        - sqs:GetQueueAttributes
+#        - sqs:SendMessage
+#      Resource:
+#        - { "Fn::GetAtt": ["EmailsAddressesQueue", "Arn" ] }
+#        - { "Fn::GetAtt": ["ContactsIdsQueue", "Arn" ] }
+#
+#
+##    -
+##      Effect: Allow
+##      Action:
+##      - sqs:SendMessage
+##      - sqs:GetQueueAttributes
+##      Resource:
+##      - { "Fn::GetAtt": ["ContactsIdsQueue", "Arn" ] }
+
+
+# you can define service wide environment variables here
+#  environment:
+#    variable1: value1
+  environment:
+#    CONTACTS_TABLE: ${self:provider.stage}-cloud-crm-contacts
+    CONTACTS_TABLE:
+      'Fn::ImportValue':
+        "Fn::Join":
+        - ':'
+        - - ${self:custom.persistence}
+          - 'ContactsDynamoDBTableName'
+
+    #    GROUPS_TABLE: ${self:provider.stage}-cloud-crm-groups
+    GROUPS_TABLE:
+      'Fn::ImportValue':
+        "Fn::Join":
+        - ':'
+        - - ${self:custom.persistence}
+          - 'GroupsDynamoDBTableName'
+
+
+    #    CONTACT_UPDATES_TABLE: ${self:provider.stage}-cloud-crm-contact-updates
+    CONTACT_UPDATES_TABLE:
+      'Fn::ImportValue':
+        "Fn::Join":
+        - ':'
+        - - ${self:custom.persistence}
+          - 'ContactUpdatesDynamoDBTableName'
+
+
+
+    #    COMPANIES_TABLE: ${self:provider.stage}-cloud-crm-companies
+
+    COMPANIES_TABLE:
+      'Fn::ImportValue':
+        "Fn::Join":
+        - ':'
+        - - ${self:custom.persistence}
+          - 'CompaniesDynamoDBTableName'
+
+    #    AUTOMATIC_NOTIFICATIONS_TOPIC_TITLE: ${self:provider.stage}-cloud-crm-automatic-notifications
+    AUTOMATIC_NOTIFICATIONS_TOPIC_TITLE:
+      'Fn::ImportValue':
+        "Fn::Join":
+        - ':'
+        - - ${self:custom.persistence}
+          - 'ContactManagementTopicName'
+
+
+    #    AUTOMATIC_NOTIFICATIONS_TOPIC_ARN:
+    AUTOMATIC_NOTIFICATIONS_TOPIC_ARN:
+      'Fn::ImportValue':
+        "Fn::Join":
+        - ':'
+        - - ${self:custom.persistence}
+          - 'ContactManagementTopic'
+
+
+#      Ref: ContactManagementTopic
+    WEB_UI_BASE_URL: perfsys-cloud-crm-ui-${self:provider.stage}.s3-website-${self:provider.region}.amazonaws.com
+
+# you can add packaging information here
+#package:
+#  include:
+#    - include-me.js
+#    - include-me-dir/**
+#  exclude:
+#    - exclude-me.js
+#    - exclude-me-dir/**
+
+functions:
+
+#  hello:
+#    handler: handler.hello
+
+#    The following are a few example events you can configure
+#    NOTE: Please make sure to change your handler code to work with those events
+#    Check the event documentation for details
+#    events:
+#      - http:
+#          path: users/create
+#          method: get
+#      - s3: ${env:BUCKET}
+#      - schedule: rate(10 minutes)
+#      - sns: greeter-topic
+#      - stream: arn:aws:dynamodb:region:XXXXXX:table/foo/stream/1970-01-01T00:00:00.000
+#      - alexaSkill
+#      - alexaSmartHome: amzn1.ask.skill.xx-xx-xx-xx
+#      - iot:
+#          sql: "SELECT * FROM 'some_topic'"
+#      - cloudwatchEvent:
+#          event:
+#            source:
+#              - "aws.ec2"
+#            detail-type:
+#              - "EC2 Instance State-change Notification"
+#            detail:
+#              state:
+#                - pending
+#      - cloudwatchLog: '/aws/lambda/hello'
+#      - cognitoUserPool:
+#          pool: MyUserPool
+#          trigger: PreSignUp
+
+#    Define function environment variables here
+#    environment:
+#      variable2: value2
+
+  companies-list:
+    handler: index.handler
+    events:
+      - http:
+          method: get
+          path: '/companies'
+          cors: true
+
+  company-info:
+    handler: index.handler
+    events:
+      - http:
+          method: get
+          path: '/companies/{companyId}'
+          cors: true
+
+  update-company-info:
+    handler: index.handler
+    events:
+      - http:
+          method: put
+          path: '/companies'
+          cors: true
+
+  contacts-list-by-company:
+    handler: index.handler
+    events:
+      - http:
+          method: get
+          path: '/companies/{companyId}/contacts'
+          cors: true
+
+  contacts-management-act-not:
+    handler: dynamoDBStreamListeners.contactManagementActionNotification
+    events:
+      - stream:
+          type: dynamodb
+          arn:
+            Fn::ImportValue: ${self:custom.persistence}:ContactsDynamoDBTableStreamArn
+
+  #            Fn::GetAtt:
+#              - ContactsDynamoDBTable
+#              - StreamArn
+
+  companies-table-controller:
+    handler: dynamoDBStreamListeners.companiesTableController
+    events:
+      - stream:
+          type: dynamodb
+          arn:
+            Fn::ImportValue: ${self:custom.persistence}:ContactsDynamoDBTableStreamArn
+
+#            Fn::GetAtt:
+#              - ContactsDynamoDBTable
+#              - StreamArn
+
+  external-contacts-create:
+    handler: index.handler
+    events:
+      - http:
+          path: '/external/contacts'
+          method: post
+          cors: true
+          private: true
+#          https://serverless.com/framework/docs/providers/aws/events/apigateway/#http-endpoint-with-extended-options
+
+  sources-list:
+    handler: index.handler
+    events:
+      - http:
+          path: '/sources'
+          method: get
+          cors: true
+
+  locations-list:
+    handler: index.handler
+    events:
+    - http:
+        path: '/locations'
+        method: get
+        cors: true
+
+  groups-list:
+    handler: index.handler
+    events:
+      - http:
+          path: '/groups'
+          method: get
+          cors: true
+
+  groups-create:
+    handler: index.handler
+    events:
+      - http:
+          path: '/groups'
+          method: post
+          cors: true
+
+  types-list:
+    handler: index.handler
+    events:
+      - http:
+          path: '/types'
+          method: get
+          cors: true
+
+  countries-list:
+    handler: index.handler
+    events:
+      - http:
+          path: '/countries'
+          method: get
+          cors: true
+
+#  statuses-list:
+#    handler: index.handler
+#    events:
+#      - http:
+#          path: '/statuses'
+#          method: get
+#          cors: true
+
+  contacts-create:
+    handler: index.handler
+    events:
+      - http:
+          path: '/contacts'
+          method: post
+          cors: true
+
+  contacts-list:
+    handler: index.handler
+    events:
+      - http:
+          path: '/contacts'
+          method: get
+          cors: true
+
+  contacts-list-group:
+    handler: index.handler
+    events:
+      - http:
+          path: '/contacts/{group_id}'
+          method: get
+          cors: true
+
+  contacts-get-one:
+    handler: index.handler
+    events:
+      - http:
+          path: '/contacts/{group_id}/{name}'
+          method: get
+          cors: true
+
+  contacts-delete-one:
+    handler: index.handler
+    events:
+      - http:
+          path: '/contacts/{group_id}/{name}'
+          method: delete
+          cors: true
+
+  contacts-update-one:
+    handler: index.handler
+    events:
+      - http:
+          path: '/contacts/{group_id}/{name}'
+          method: put
+          cors: true
+
+  labels-group-create:
+    handler: index.handler
+    events:
+      - http:
+          path: '/groups/{group_id}/labels'
+          method: post
+          cors: true
+
+  labels-group-list:
+    handler: index.handler
+    events:
+      - http:
+          path: '/groups/{group_id}/labels'
+          method: get
+          cors: true
+
+  status-group-create:
+   handler: index.handler
+   events:
+     - http:
+         path: '/groups/{group_id}/statuses'
+         method: post
+         cors: true
+
+  status-group-list:
+   handler: index.handler
+   events:
+     - http:
+         path: '/groups/{group_id}/statuses'
+         method: get
+         cors: true
+
+  updates-contact-list:
+    handler: index.handler
+    events:
+      - http:
+          path: '/contacts/{group_id}/{name}/updates'
+          method: get
+          cors: true
+
+  updates-contact-create:
+    handler: index.handler
+    events:
+      - http:
+          path: '/contacts/{group_id}/{name}/updates'
+          method: post
+          cors: true
+
+  updates-contact-get-one:
+    handler: index.handler
+    events:
+      - http:
+          path: '/contacts/{group_id}/{name}/updates/{id}'
+          method: get
+          cors: true
+
+  updates-contact-update-one:
+    handler: index.handler
+    events:
+      - http:
+          path: '/contacts/{group_id}/{name}/updates/{id}'
+          method: put
+          cors: true
+
+  updates-contact-delete-one:
+    handler: index.handler
+    events:
+      - http:
+          path: '/contacts/{group_id}/{name}/updates/{id}'
+          method: delete
+          cors: true
+
+  get-google-email:
+    handler: index.handler
+    events:
+    - http:
+        path: '/email'
+        method: get
+        cors: true
+
+resources:
+  Resources:
+
+  Outputs:
